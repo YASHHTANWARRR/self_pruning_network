@@ -17,7 +17,39 @@ if DEVICE.type == "cuda":
     print(f"[INFO] GPU: {torch.cuda.get_device_name(0)}")
     print(f"[INFO] VRAM available: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
 
+#plotting function
+def plot_results(results):
+    lambdas = [r[0] for r in results]
+    accs = [r[1] for r in results]
+    sparsities = [r[2] for r in results]
 
+    plt.figure()
+    plt.plot(lambdas, accs, marker='o')
+    plt.xscale('log')
+    plt.xlabel("Lambda")
+    plt.ylabel("Accuracy (%)")
+    plt.title("Accuracy vs Lambda")
+    plt.savefig("accuracy_vs_lambda.png")
+    plt.close()
+
+    plt.figure()
+    plt.plot(lambdas, sparsities, marker='o')
+    plt.xscale('log')
+    plt.xlabel("Lambda")
+    plt.ylabel("Sparsity (%)")
+    plt.title("Sparsity vs Lambda")
+    plt.savefig("sparsity_vs_lambda.png")
+    plt.close()
+
+    plt.figure()
+    plt.plot(sparsities, accs, marker='o')
+    plt.xlabel("Sparsity (%)")
+    plt.ylabel("Accuracy (%)")
+    plt.title("Accuracy vs Sparsity Tradeoff")
+    plt.savefig("accuracy_vs_sparsity.png")
+    plt.close()
+
+#nn module
 class PrunableLinear(nn.Module):
     def __init__(self, in_features, out_features, bias=True):
         super().__init__()
@@ -36,7 +68,7 @@ class PrunableLinear(nn.Module):
         pruned = (gates < threshold).sum().item()
         return total, pruned
 
-
+#self pruning module
 class SelfPruningNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -95,6 +127,7 @@ class SelfPruningNet(nn.Module):
         return np.concatenate(vals)
 
 
+#data loading and training functions
 def get_dataloaders():
     mean = (0.4914, 0.4822, 0.4465)
     std = (0.2023, 0.1994, 0.2010)
@@ -119,7 +152,7 @@ def get_dataloaders():
 
     return train_loader, test_loader
 
-
+#training loop
 def train_one_epoch(model, loader, optimizer, scaler, lam):
     model.train()
     total_loss = cls_loss_sum = sp_loss_sum = 0
@@ -146,7 +179,7 @@ def train_one_epoch(model, loader, optimizer, scaler, lam):
     n = len(loader)
     return total_loss / n, cls_loss_sum / n, sp_loss_sum / n
 
-
+#evaluation function
 @torch.no_grad()
 def evaluate(model, loader):
     model.eval()
@@ -161,7 +194,7 @@ def evaluate(model, loader):
 
     return 100 * correct / total
 
-
+#main training function
 def train_model(lam):
     train_loader, test_loader = get_dataloaders()
     model = SelfPruningNet().to(DEVICE)
@@ -192,20 +225,38 @@ def train_model(lam):
 
     return model, acc, sparsity
 
-
+#main function to run experiments
 def main():
     lambdas = [1e-2, 1e-1, 1]#updated values
     results = []
+    
+    #updated main loop to save models and track best model
+    best_acc = 0
+    best_model = None
+    best_lambda = None
 
     for lam in lambdas:
         print(f"\nTraining λ = {lam}")
         model, acc, sparsity = train_model(lam)
+
         results.append((lam, acc, sparsity))
+
+        torch.save(model.state_dict(), f"model_lambda_{lam}.pth")
+
+        if acc > best_acc:
+            best_acc = acc
+            best_model = model
+            best_lambda = lam
+
+    torch.save(best_model.state_dict(), "best_model.pth")
 
     print("\nResults:")
     for lam, acc, sp in results:
         print(f"{lam} → Acc: {acc:.2f}% | Sparsity: {sp:.1f}%")
 
+    print(f"\nBest model: λ = {best_lambda} | Acc = {best_acc:.2f}%")
+
+    plot_results(results)
 
 if __name__ == "__main__":
     main()
