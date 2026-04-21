@@ -84,3 +84,8 @@ def train(lambda_val=1e-3, epochs=10):
         print(f"Epoch {epoch+1}: {total_loss:.4f}")
 
     return model, testloader
+#added for debugging
+print("Gate stats:",
+      gates.min().item(),
+      gates.mean().item(),
+      gates.max().item())

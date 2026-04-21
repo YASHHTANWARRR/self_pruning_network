@@ -29,7 +29,7 @@ def evaluate(model, testloader):
             gates = m.get_gates()
 
             total_w += gates.numel()
-            pruned += (gates < 1e-2).sum().item()
+            pruned += (gates < 0.05).sum().item()
 
     sparsity = 100 * pruned / total_w
 

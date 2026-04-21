@@ -8,10 +8,10 @@ class PrunableLinear(nn.Module):
 
         self.weight = nn.Parameter(torch.randn(out_features, in_features) * 0.01)
         self.bias = nn.Parameter(torch.zeros(out_features))
-        self.gate_scores = nn.Parameter(torch.ones(out_features, in_features) * 1.0)  #updated this to 1 for better performance
+        self.gate_scores = nn.Parameter(torch.ones(out_features, in_features))  #updated this to 1 for better performance
 
     def forward(self, x):
-        gates = torch.sigmoid(self.gate_scores)
+        gates = torch.clamp(self.gate_scores, 0, 1) #added temperature scaling
         pruned_weights = self.weight * gates
         return F.linear(x, pruned_weights, self.bias)
 
