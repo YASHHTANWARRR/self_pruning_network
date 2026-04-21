@@ -72,16 +72,15 @@ class SelfPruningNet(nn.Module):
     def prunable_layers(self):
         return [m for m in self.modules() if isinstance(m, PrunableLinear)]
 
+#new sparsity block
     def sparsity_loss(self):
         total = 0
-        count = 0
         for layer in self.prunable_layers():
             g = torch.sigmoid(layer.gate_scores)
-            total += g.sum()
-            count += g.numel()
-        return total / count
-
-    def network_sparsity(self, threshold=0.1):
+            total += (g + 0.1 * g * (1 - g)).mean()
+        return total
+    
+    def network_sparsity(self, threshold=0.2): #threshold updated
         total, pruned = 0, 0
         for layer in self.prunable_layers():
             t, p = layer.sparsity_info(threshold)
@@ -172,13 +171,19 @@ def train_model(lam):
 
     optimizer = optim.Adam([
         {"params": other_params, "lr": 3e-3},
-        {"params": gate_params, "lr": 1e-2}
+        {"params": gate_params, "lr": 5e-2}
     ])
 
-    scaler = GradScaler(device_type='cuda')
+    scaler = GradScaler()
 
     for epoch in range(1, 41):
         total, cls, sp = train_one_epoch(model, train_loader, optimizer, scaler, lam)
+        
+        for layer in model.prunable_layers():
+            g = torch.sigmoid(layer.gate_scores)
+            print("Gate stats:", g.min().item(), g.mean().item(), g.max().item())
+            break
+        
         acc = evaluate(model, test_loader)
         sparsity = model.network_sparsity()
 
@@ -189,7 +194,7 @@ def train_model(lam):
 
 
 def main():
-    lambdas = [1e-3, 1e-2, 1e-1]
+    lambdas = [1e-2, 1e-1, 1]#updated values
     results = []
 
     for lam in lambdas:
